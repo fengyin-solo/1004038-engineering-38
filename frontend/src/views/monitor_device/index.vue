@@ -37,6 +37,7 @@
       <thead>
         <tr>
           <th v-for="column in columns" :key="column">{{ column }}</th>
+          <th>校准结论</th>
           <th>当前状态</th>
           <th>可执行动作</th>
         </tr>
@@ -44,7 +45,8 @@
       <tbody>
         <tr v-for="row in rows" :key="String(row.id)">
           <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
-          <td>{{ row.status }}</td>
+          <td :class="{ 'error-text': row.calibrationPending }">{{ row.calibrationConclusion }}</td>
+          <td>{{ row.effectiveStatus }}</td>
           <td class="row-actions">
             <button
               v-for="action in actions"
@@ -58,7 +60,7 @@
           </td>
         </tr>
         <tr v-if="!rows.length">
-          <td :colspan="columns.length + 2" class="empty-state">暂无监测设备数据，可先登记监测设备</td>
+          <td :colspan="columns.length + 3" class="empty-state">暂无监测设备数据，可先登记监测设备</td>
         </tr>
       </tbody>
     </table>
@@ -75,19 +77,24 @@ import { computed, onMounted, ref } from 'vue'
 
 import {
   downloadEntries,
-  listEntries,
+  listMonitorDevices,
   moduleMeta,
+  monitorDeviceStatusStat,
   runAction as applyAction,
 } from '@/api/local-service'
-import type { EntryRow } from '@/data/types'
+import type { DeviceCalibrationView } from '@/data/calibration'
 
 const meta = moduleMeta('monitor_device')
 const columns = ["设备编号", "设备类型", "安装位置", "监测参数", "安装日期", "校准周期", "最近校准", "设备状态"]
 const actions = ["确认安装", "申请校准", "上报故障"]
 const statuses = ["待安装", "运行中", "待校准", "已故障"]
-const stats = [{"label": "运行中设备", "value": 0}, {"label": "待校准设备", "value": 0}, {"label": "故障设备", "value": 0}]
+const stats = ref([
+  { label: "运行中设备", value: 0 },
+  { label: "待校准设备", value: 0 },
+  { label: "故障设备", value: 0 },
+])
 
-const rows = ref<EntryRow[]>([])
+const rows = ref<DeviceCalibrationView[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
@@ -95,7 +102,7 @@ const filterFields = columns.slice(0, 3)
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
-    count: rows.value.filter((row) => String(row.status) === status).length,
+    count: rows.value.filter((row) => String(row.effectiveStatus) === status).length,
   })),
 )
 
@@ -112,7 +119,7 @@ function openCreate() {
   errorMessage.value = '监测设备登记入口尚未接入审批流'
 }
 
-function runAction(action: string, row: EntryRow) {
+function runAction(action: string, row: DeviceCalibrationView) {
   errorMessage.value = ''
   const result = applyAction(meta.key, Number(row.id), action)
   if (!result.ok) {
@@ -125,9 +132,15 @@ function runAction(action: string, row: EntryRow) {
 function reload() {
   errorMessage.value = ''
   try {
-    const payload = listEntries(meta.key, filters.value)
-    rows.value = payload.items
-    total.value = payload.total
+    const devices = listMonitorDevices(filters.value)
+    rows.value = devices
+    total.value = devices.length
+    const summary = monitorDeviceStatusStat()
+    stats.value = [
+      { label: "运行中设备", value: summary.running },
+      { label: "待校准设备", value: summary.pendingCalibration },
+      { label: "故障设备", value: summary.fault },
+    ]
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '监测设备列表读取失败'
   }

@@ -1,5 +1,13 @@
 import { MODULE_BY_KEY } from '@/data/modules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
+import {
+  decorateDeviceCalibration,
+  DEVICE_STATUS_FAULT,
+  DEVICE_STATUS_PENDING_CALIBRATION,
+  DEVICE_STATUS_PENDING_INSTALL,
+  DEVICE_STATUS_RUNNING,
+} from '@/data/calibration'
+import type { DeviceCalibrationView } from '@/data/calibration'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
@@ -26,6 +34,47 @@ export function filterRows(rows: EntryRow[], filters: Record<string, string>): E
 export function listEntries(key: string, filters: Record<string, string> = {}): PageResult {
   const matched = filterRows(listRows(key), filters)
   return { items: matched, total: matched.length, page: 1, size: matched.length }
+}
+
+// 监测设备列表：在过滤结果上叠加校准结论（纯派生，不回写存储）。
+// 已有运行设备/故障设备数据原样保留，校准状态只在读取时按统一口径计算。
+export function listMonitorDevices(filters: Record<string, string> = {}): DeviceCalibrationView[] {
+  return decorateDeviceCalibration(filterRows(listRows('monitor_device'), filters))
+}
+
+export type DeviceStatusStat = {
+  running: number
+  pendingCalibration: number
+  fault: number
+  pendingInstall: number
+}
+
+// 设备页顶部统计：与列表、流量页用同一个 effectiveStatus 口径。
+export function monitorDeviceStatusStat(): DeviceStatusStat {
+  const stat: DeviceStatusStat = { running: 0, pendingCalibration: 0, fault: 0, pendingInstall: 0 }
+  for (const device of listMonitorDevices()) {
+    switch (device.effectiveStatus) {
+      case DEVICE_STATUS_RUNNING:
+        stat.running += 1
+        break
+      case DEVICE_STATUS_PENDING_CALIBRATION:
+        stat.pendingCalibration += 1
+        break
+      case DEVICE_STATUS_FAULT:
+        stat.fault += 1
+        break
+      case DEVICE_STATUS_PENDING_INSTALL:
+        stat.pendingInstall += 1
+        break
+    }
+  }
+  return stat
+}
+
+// 流量监测页读取监测设备校准结果的唯一入口：返回同一份口径的派生数据，
+// 不新增/不复制设备样例，也不改动设备模块的存储。
+export function listDeviceCalibrationViews(): DeviceCalibrationView[] {
+  return decorateDeviceCalibration(listRows('monitor_device'))
 }
 
 export function runAction(key: string, id: number, action: string): ActionResult {

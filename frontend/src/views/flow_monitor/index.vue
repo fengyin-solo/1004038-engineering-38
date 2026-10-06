@@ -63,6 +63,42 @@
       </tbody>
     </table>
 
+    <section class="calibration-panel">
+      <header class="calibration-head">
+        <h3>监测设备校准情况</h3>
+        <p class="page-desc">按「最近校准 + 校准周期上限」统一推导，与监测设备页同一口径；只读，不在本页改动设备。</p>
+      </header>
+      <p class="status-legend">
+        <span class="legend-item">待校准：{{ calibrationPendingCount }}</span>
+        <span class="legend-item">正常：{{ calibrationHealthyCount }}</span>
+      </p>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>设备编号</th>
+            <th>设备类型</th>
+            <th>安装位置</th>
+            <th>最近校准</th>
+            <th>校准周期(天)</th>
+            <th>校准结论</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="device in deviceCalibrations" :key="String(device.id)">
+            <td>{{ device['设备编号'] ?? '—' }}</td>
+            <td>{{ device['设备类型'] ?? '—' }}</td>
+            <td>{{ device['安装位置'] ?? '—' }}</td>
+            <td>{{ device['最近校准'] ?? '—' }}</td>
+            <td>{{ device['校准周期'] ?? '—' }}</td>
+            <td :class="{ 'error-text': device.calibrationPending }">{{ device.calibrationConclusion }}</td>
+          </tr>
+          <tr v-if="!deviceCalibrations.length">
+            <td colspan="6" class="empty-state">暂无监测设备校准数据</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <footer class="page-foot">
       <span>共 {{ total }} 条流量监测记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
@@ -76,9 +112,11 @@ import { computed, onMounted, ref } from 'vue'
 import {
   downloadEntries,
   listEntries,
+  listDeviceCalibrationViews,
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import type { DeviceCalibrationView } from '@/data/calibration'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('flow_monitor')
@@ -92,6 +130,16 @@ const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+
+// 校准结果只从统一服务读取，本页不自行推导、也不回写设备数据。
+const deviceCalibrations = ref<DeviceCalibrationView[]>([])
+const calibrationPendingCount = computed(
+  () => deviceCalibrations.value.filter((device) => device.calibrationPending).length,
+)
+const calibrationHealthyCount = computed(
+  () => deviceCalibrations.value.length - calibrationPendingCount.value,
+)
+
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
@@ -128,6 +176,7 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    deviceCalibrations.value = listDeviceCalibrationViews()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '流量监测列表读取失败'
   }
