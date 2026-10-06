@@ -6,9 +6,11 @@
   "repoKind": "frontend-only",
   "scripts": {
     "dev": "vite",
+    "prebuild": "npm run validate:seed",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "validate:seed": "node scripts/validate-seed.mjs"
   },
   "dependencies": {
     "pinia": "^2.1.7",

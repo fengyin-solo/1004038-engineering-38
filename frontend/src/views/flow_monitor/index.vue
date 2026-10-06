@@ -67,6 +67,54 @@
       <span>共 {{ total }} 条流量监测记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
+
+    <section class="calibration-panel">
+      <h3 class="calibration-title">监测设备校准结论</h3>
+      <p class="page-desc">
+        与构建校验同一口径（src/data/calibration.js）：最近校准 + 校准周期不晚于今日即为「待校准」；只读展示，不改动设备数据。
+      </p>
+      <div class="stat-row">
+        <article class="stat-card">
+          <span class="stat-label">待校准设备</span>
+          <strong class="stat-value">{{ calibrationDueCount }}</strong>
+        </article>
+        <article class="stat-card">
+          <span class="stat-label">校准有效</span>
+          <strong class="stat-value">{{ calibrationOkCount }}</strong>
+        </article>
+        <article class="stat-card">
+          <span class="stat-label">校准数据缺失</span>
+          <strong class="stat-value">{{ calibrationMissingCount }}</strong>
+        </article>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>设备编号</th>
+            <th>设备类型</th>
+            <th>安装位置</th>
+            <th>最近校准</th>
+            <th>校准周期</th>
+            <th>校准到期日</th>
+            <th>校准结论</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in calibrationRows" :key="item.id">
+            <td>{{ item.设备编号 }}</td>
+            <td>{{ item.设备类型 }}</td>
+            <td>{{ item.安装位置 }}</td>
+            <td>{{ item.最近校准 }}</td>
+            <td>{{ item.校准周期 }}</td>
+            <td>{{ item.校准到期日 }}</td>
+            <td>{{ item.校准结论 }}</td>
+          </tr>
+          <tr v-if="!calibrationRows.length">
+            <td colspan="7" class="empty-state">暂无监测设备校准数据</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
   </section>
 </template>
 
@@ -75,10 +123,12 @@ import { computed, onMounted, ref } from 'vue'
 
 import {
   downloadEntries,
+  listDeviceCalibration,
   listEntries,
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import type { DeviceCalibrationView } from '@/api/local-service'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('flow_monitor')
@@ -92,6 +142,16 @@ const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const calibrationRows = ref<DeviceCalibrationView[]>([])
+const calibrationDueCount = computed(
+  () => calibrationRows.value.filter((item) => item.校准结论 === '待校准').length,
+)
+const calibrationOkCount = computed(
+  () => calibrationRows.value.filter((item) => item.校准结论 === '校准有效').length,
+)
+const calibrationMissingCount = computed(
+  () => calibrationRows.value.filter((item) => item.校准结论 === '数据缺失').length,
+)
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
@@ -133,5 +193,12 @@ function reload() {
   }
 }
 
-onMounted(reload)
+function reloadCalibration() {
+  calibrationRows.value = listDeviceCalibration()
+}
+
+onMounted(() => {
+  reload()
+  reloadCalibration()
+})
 </script>

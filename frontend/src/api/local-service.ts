@@ -1,4 +1,5 @@
 import { MODULE_BY_KEY } from '@/data/modules'
+import { calibrationDueDate, calibrationVerdict, formatDate } from '@/data/calibration'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
 
@@ -59,6 +60,35 @@ export function runAction(key: string, id: number, action: string): ActionResult
 export function resetModule(key: string): PageResult {
   resetRows(key)
   return listEntries(key)
+}
+
+// 监测设备校准结论视图：供流量监测页读取。判定规则与构建校验共用 src/data/calibration.js，
+// 保证同一口径。纯只读派生——不写回 monitor_device 数据，运行中与已故障设备记录保持原样。
+export type DeviceCalibrationView = {
+  id: number
+  设备编号: string
+  设备类型: string
+  安装位置: string
+  最近校准: string
+  校准周期: string
+  校准到期日: string
+  校准结论: string
+}
+
+export function listDeviceCalibration(): DeviceCalibrationView[] {
+  return listRows('monitor_device').map((row) => {
+    const due = calibrationDueDate(row)
+    return {
+      id: Number(row.id),
+      设备编号: String(row.设备编号 ?? '—'),
+      设备类型: String(row.设备类型 ?? '—'),
+      安装位置: String(row.安装位置 ?? '—'),
+      最近校准: String(row.最近校准 ?? '—'),
+      校准周期: row.校准周期 === undefined || row.校准周期 === '' ? '—' : `${String(row.校准周期)} 个月`,
+      校准到期日: due ? formatDate(due) : '—',
+      校准结论: calibrationVerdict(row),
+    }
+  })
 }
 
 export function exportEntries(key: string): { filename: string; content: string } {

@@ -38,6 +38,28 @@ cd frontend
 npm run build
 ```
 
+构建前会先自动执行监测设备样例校验（`prebuild` 钩子），校验不通过则构建直接失败。
+
+## 监测设备样例校验
+
+`frontend/scripts/validate-seed.mjs` 在构建阶段校验 `frontend/src/data/seed.json` 里每台监测设备的
+**设备类型、安装位置、最近校准（YYYY-MM-DD，不得晚于基准日期）、校准周期（整数月，上限见
+`frontend/src/data/calibration.js` 的 `CALIBRATION_CYCLE_MAX_MONTHS`，当前 36 个月）**。
+任何缺失或越界都会按 `monitor_device#<id>（设备编号 MONI-XXXX）` 定位到具体设备；
+此外还会核对状态一致性：运行中设备校准到期必须标「待校准」，未到期的设备不允许挂「待校准」
+（待安装、已故障设备不参与该项核对）。
+
+校验是**只读**的：不改 seed.json、不生成或补写样例，重复执行不会产生重复数据。构建失败后
+可单独重跑：
+
+```bash
+cd frontend
+npm run validate:seed        # 或仓库根目录 make validate
+```
+
+流量监测页的「监测设备校准结论」与构建校验共用 `frontend/src/data/calibration.js` 的同一套判定，
+口径一致；该视图只读派生，不写回设备数据，浏览器里已有的运行中与已故障设备记录不会被覆盖。
+
 ## 业务模块
 
 | 模块 | 目录 | 业务对象 | 主要字段 |
@@ -66,6 +88,6 @@ npm run build
 - 每个模块的页面在 `frontend/src/views/<模块>/index.vue`，页面只负责渲染，读写统一走
   `frontend/src/api/local-service.ts`。
 - 字段、状态、动作与流转目标集中在 `frontend/src/data/modules.ts`；示例数据在
-  `frontend/src/data/seed.ts`。
+  `frontend/src/data/seed.json`（`seed.ts` 只做类型化导出，供页面运行时播种）。
 - 状态流转只允许在 `local-service.ts` 里改，页面组件不做业务判断。
 - 想回到初始数据：清掉浏览器里 `underground-pipeline-inspection:entries` 这一项，或调用 `resetModule(模块)`。
